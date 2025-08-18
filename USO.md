@@ -1,5 +1,3 @@
-Markdown
-
 # intensivo-SOC
 
 ---
@@ -29,7 +27,7 @@ sudo apt install curl wget unzip ufw -y
 # Instalar Wazuh Agent
 # -------------------------
 echo "[*] Descargando e instalando Wazuh Agent..."
-curl -sO [https://packages.wazuh.com/4.x/wazuh-agent-4.7.3.deb](https://packages.wazuh.com/4.x/wazuh-agent-4.7.3.deb)
+curl -sO https://packages.wazuh.com/4.x/wazuh-agent-4.7.3.deb
 sudo WAZUH_MANAGER="$WAZUH_MANAGER_IP" dpkg -i ./wazuh-agent-4.7.3.deb
 sudo systemctl enable wazuh-agent
 sudo systemctl start wazuh-agent
@@ -93,36 +91,44 @@ echo "Wazuh Agent conectado a: $WAZUH_MANAGER_IP"
 echo "Suricata corriendo en interfaz: $INTERFAZ_RED"
 echo "UFW activo con logging"
 echo "Active Responses habilitado"
-🚀 Uso
-Copia el script en tu servidor (ej: setup_defensa.sh).
+```
+
+---
+
+## 🚀 Uso
+
+Copia el script en tu servidor (ej: `setup_defensa.sh`).
 
 Dale permisos de ejecución:
 
-Bash
-
+```bash
 chmod +x setup_defensa.sh
+```
+
 Ejecútalo como root:
 
-Bash
-
+```bash
 sudo ./setup_defensa.sh
+```
+
 Cambia las variables:
 
-WAZUH_MANAGER_IP → IP de tu Wazuh Manager.
+- `WAZUH_MANAGER_IP` → IP de tu Wazuh Manager.
+- `INTERFAZ_RED` → interfaz de red (usa `ip a` para verla).
 
-INTERFAZ_RED → interfaz de red (ip a para verla).
+---
 
-JSON del Dashboard
-Guarda este contenido como dashboard_ctf.json y luego lo importas en Kibana (Stack Management → Saved Objects → Import).
+## JSON del Dashboard
 
-JSON
+Guarda este contenido como `dashboard_ctf.json` y luego lo importas en Kibana (Stack Management → Saved Objects → Import).
 
+```json
 {
   "attributes": {
     "title": "CTF Defensa - Blue Team",
     "hits": 0,
     "description": "Dashboard de defensa con Wazuh + Suricata + Firewall",
-    "panelsJSON": "[ \n      {\"type\":\"visualization\",\"id\":\"ssh_failed_logins\",\"panelIndex\":\"1\",\"gridData\":{\"x\":0,\"y\":0,\"w\":24,\"h\":10},\"title\":\"Intentos SSH fallidos\"},\n      {\"type\":\"visualization\",\"id\":\"blocked_ips\",\"panelIndex\":\"2\",\"gridData\":{\"x\":0,\"y\":10,\"w\":12,\"h\":10},\"title\":\"IPs bloqueadas por Active Response\"},\n      {\"type\":\"visualization\",\"id\":\"suricata_alerts\",\"panelIndex\":\"3\",\"gridData\":{\"x\":12,\"y\":10,\"w\":12,\"h\":10},\"title\":\"Alertas Suricata (Top)\"},\n      {\"type\":\"visualization\",\"id\":\"suspicious_processes\",\"panelIndex\":\"4\",\"gridData\":{\"x\":0,\"y\":20,\"w\":24,\"h\":10},\"title\":\"Procesos sospechosos detectados\"}\n    ]",
+    "panelsJSON": "[{\"type\":\"visualization\",\"id\":\"ssh_failed_logins\",\"panelIndex\":\"1\",\"gridData\":{\"x\":0,\"y\":0,\"w\":24,\"h\":10},\"title\":\"Intentos SSH fallidos\"}]",
     "optionsJSON": "{\"useMargins\":true,\"hidePanelTitles\":false}",
     "version": 1
   },
@@ -137,191 +143,210 @@ JSON
   },
   "type": "dashboard"
 }
-📘 Mini-Playbook de Respuesta Rápida (CTF Defensa)
-1️⃣ Ataques de Fuerza Bruta SSH
-🔎 Detección en Dashboard: Panel "Intentos SSH fallidos" con muchas entradas desde la misma IP.
+```
 
-⚡ Acción inmediata:
+---
 
-Verificar si Wazuh ya bloqueó la IP (Active Response).
+## 📘 Mini-Playbook de Respuesta Rápida (CTF Defensa)
 
-Si no:
+### 1️⃣ Ataques de Fuerza Bruta SSH
 
-Bash
+**Detección en Dashboard:** Panel "Intentos SSH fallidos" con muchas entradas desde la misma IP.
 
+**Acción inmediata:**
+- Verificar si Wazuh ya bloqueó la IP (Active Response).
+- Si no:
+
+```bash
 sudo ufw deny from 10.10.X.X
-Revisar si el atacante logró acceso (/var/log/auth.log).
+```
 
-Si encuentras un usuario comprometido:
+- Revisar si el atacante logró acceso (`/var/log/auth.log`).
+- Si encuentras un usuario comprometido:
 
-Bash
-
+```bash
 sudo passwd -l usuario
 sudo kill -9 $(pgrep -u usuario)
-2️⃣ Escaneos de Red / Reconocimiento
-🔎 Detección en Dashboard: Panel "Alertas Suricata" mostrando Nmap scan, Port scan, etc.
+```
 
-⚡ Acción inmediata:
+---
 
-Bloquear IP atacante:
+### 2️⃣ Escaneos de Red / Reconocimiento
 
-Bash
+**Detección en Dashboard:** Panel "Alertas Suricata" mostrando Nmap scan, Port scan, etc.
 
+**Acción inmediata:**
+- Bloquear IP atacante:
+
+```bash
 sudo ufw deny from 10.10.X.X
-Marcarla como atacante en el dashboard (para tu equipo).
+```
 
-3️⃣ Exploits de Red / DoS
-🔎 Detección en Dashboard: Suricata reporta Exploit Attempt o DoS. Carga inusual en CPU o RAM (htop).
+- Marcarla como atacante en el dashboard (para tu equipo).
 
-⚡ Acción inmediata:
+---
 
-Bloquear IP atacante.
+### 3️⃣ Exploits de Red / DoS
 
-Si el servicio afectado no es vital → detenerlo temporalmente:
+**Detección en Dashboard:** Suricata reporta Exploit Attempt o DoS. Carga inusual en CPU o RAM (`htop`).
 
-Bash
+**Acción inmediata:**
+- Bloquear IP atacante.
+- Si el servicio afectado no es vital → detenerlo temporalmente:
 
+```bash
 sudo systemctl stop servicio_afectado
-Si es vital → reiniciar solo ese servicio (ej. Apache/Nginx).
+```
 
-4️⃣ Procesos Sospechosos / Reverse Shell
-🔎 Detección en Dashboard: Panel "Procesos sospechosos" muestra nc, bash -i, python -c "import socket", etc.
+- Si es vital → reiniciar solo ese servicio (ej. Apache/Nginx).
 
-⚡ Acción inmediata:
+---
 
-Matar proceso sospechoso:
+### 4️⃣ Procesos Sospechosos / Reverse Shell
 
-Bash
+**Detección en Dashboard:** Panel "Procesos sospechosos" muestra nc, bash -i, python -c "import socket", etc.
 
+**Acción inmediata:**
+- Matar proceso sospechoso:
+
+```bash
 sudo kill -9 PID
-Identificar usuario que lo lanzó:
+```
 
-Bash
+- Identificar usuario que lo lanzó:
 
+```bash
 ps -o pid,user,cmd -p PID
-Deshabilitar cuenta si está comprometida:
+```
 
-Bash
+- Deshabilitar cuenta si está comprometida:
 
+```bash
 sudo passwd -l usuario
-5️⃣ Escalada de Privilegios
-🔎 Detección en Wazuh: Alertas de sudo inesperados. Archivos críticos modificados (/etc/passwd, /etc/shadow).
+```
 
-⚡ Acción inmediata:
+---
 
-Revisar qué usuario intentó sudo:
+### 5️⃣ Escalada de Privilegios
 
-Bash
+**Detección en Wazuh:** Alertas de sudo inesperados. Archivos críticos modificados (`/etc/passwd`, `/etc/shadow`).
 
+**Acción inmediata:**
+- Revisar qué usuario intentó sudo:
+
+```bash
 grep "sudo:" /var/log/auth.log
-Si ves root comprometido → restringir acceso total (cerrar SSH y trabajar solo desde consola del cloud).
+```
 
-🚨 Reglas de oro en un CTF defensa
-Detecta → Bloquea → Reporta (en el chat de tu equipo).
+- Si ves root comprometido → restringir acceso total (cerrar SSH y trabajar solo desde consola del cloud).
 
-No caigas en pánico: bloquea IPs primero, luego investigas.
+---
 
-Divide roles:
+## 🚨 Reglas de oro en un CTF defensa
 
-Uno mirando dashboard.
+- Detecta → Bloquea → Reporta (en el chat de tu equipo).
+- No caigas en pánico: bloquea IPs primero, luego investigas.
+- Divide roles:
+  - Uno mirando dashboard.
+  - Uno aplicando bloqueos.
+  - Uno revisando procesos/servicios.
+- Documenta ataques: anota IPs, tiempos y técnicas (te servirá para ganar puntos).
+- Mantén viva la máquina: si un servicio no es crítico → mejor detenerlo que dejar que lo exploten.
 
-Uno aplicando bloqueos.
+---
 
-Uno revisando procesos/servicios.
+## Esquema de la defensa SOC
 
-Documenta ataques: anota IPs, tiempos y técnicas (te servirá para ganar puntos).
+### ✅ Checklist de Configuración con Wazuh (CTF Defensa)
 
-Mantén viva la máquina: si un servicio no es crítico → mejor detenerlo que dejar que lo exploten.
+**1️⃣ Preparar el servidor**  
+Actualizar el sistema:
 
-Esquema de la defensa SOC
-✅ Checklist de Configuración con Wazuh (CTF Defensa)
-1️⃣ Preparar el servidor
-Actualizar el sistema
-
-Bash
-
+```bash
 sudo apt update && sudo apt upgrade -y
-Instalar dependencias básicas
+```
 
-Bash
+Instalar dependencias básicas:
 
+```bash
 sudo apt install curl wget git unzip -y
-2️⃣ Instalar Wazuh
+```
+
+**2️⃣ Instalar Wazuh**  
 Instalar Wazuh Manager (si eres tú quien centraliza la defensa, en otra máquina o en la misma).
 
 Instalar Wazuh Agent en el servidor a defender:
 
-Bash
-
-curl -sO [https://packages.wazuh.com/4.x/wazuh-agent-4.7.3.deb](https://packages.wazuh.com/4.x/wazuh-agent-4.7.3.deb)
+```bash
+curl -sO https://packages.wazuh.com/4.x/wazuh-agent-4.7.3.deb
 sudo WAZUH_MANAGER="IP_DEL_MANAGER" dpkg -i ./wazuh-agent-4.7.3.deb
 sudo systemctl enable wazuh-agent
 sudo systemctl start wazuh-agent
+```
+
 🔹 Logs cubiertos automáticamente: auth.log, syslog, sudo, procesos, rootkits.
 
-3️⃣ Conectar a un stack de análisis
+**3️⃣ Conectar a un stack de análisis**  
 Instalar Elasticsearch + Kibana (o OpenSearch) junto a Wazuh.
 
-Revisar que puedas entrar al dashboard en: http://IP_DEL_MANAGER:5601
+Revisar que puedas entrar al dashboard en: `http://IP_DEL_MANAGER:5601`
 
 Importar dashboards listos de Wazuh.
 
-4️⃣ Añadir seguridad de red
+**4️⃣ Añadir seguridad de red**  
 Instalar Suricata (IDS/IPS):
 
-Bash
-
+```bash
 sudo apt install suricata -y
-Configurarlo en modo IDS escuchando la interfaz de red:
+```
 
-Bash
+Configurar en modo IDS escuchando la interfaz de red:
 
+```bash
 sudo suricata -c /etc/suricata/suricata.yaml -i eth0
-Integrar los logs de Suricata con Wazuh: en /var/ossec/etc/ossec.conf → añadir entrada de log Suricata.
+```
+
+Integrar los logs de Suricata con Wazuh:  
+En `/var/ossec/etc/ossec.conf` → añadir entrada de log Suricata.
 
 Activar iptables/UFW con logging:
 
-Bash
-
+```bash
 sudo ufw enable
 sudo ufw logging on
 sudo ufw allow ssh
-5️⃣ Configurar Active Responses en Wazuh
-Editar /var/ossec/etc/ossec.conf → activar:
+```
 
-firewalld → bloquear IP atacante.
+**5️⃣ Configurar Active Responses en Wazuh**  
+Editar `/var/ossec/etc/ossec.conf` → activar:
 
-host-deny → añadir IP a /etc/hosts.deny.
-
-disable-account → deshabilitar usuario sospechoso.
+- firewalld → bloquear IP atacante.
+- host-deny → añadir IP a `/etc/hosts.deny`.
+- disable-account → deshabilitar usuario sospechoso.
 
 Ejemplo de respuesta automática:
 
-XML
-
+```xml
 <active-response>
   <command>firewalld</command>
   <location>local</location>
   <level>6</level>
   <timeout>600</timeout>
 </active-response>
-6️⃣ Integrar Threat Intelligence
+```
+
+**6️⃣ Integrar Threat Intelligence**  
 Conectar con AlienVault OTX (gratis).
 
 Activar reglas de Wazuh con IOCs públicos.
 
 (Opcional) Configurar consulta a VirusTotal API para hashes.
 
-7️⃣ Monitoreo en tiempo real
+**7️⃣ Monitoreo en tiempo real**  
 Dashboard de Kibana/OpenSearch:
 
-Panel de intentos SSH fallidos.
-
-Alertas de Suricata (exploit, scan, DoS).
-
-Actividad de rootkits.
-
-IPs bloqueadas por Active Responses.
-
-Opcional: configurar alertas por correo/Slack/Telegram.
-
+- Panel de intentos SSH fallidos.
+- Alertas de Suricata (exploit, scan, DoS).
+- Actividad de rootkits.
+- IPs bloqueadas por Active Responses.
+- Opcional: configurar alertas por correo/Slack/Telegram.
