@@ -1,12 +1,23 @@
+# SOC All-in-One (Manager + Dashboard + IDS/IPS + ELK)
 
+Instalación y configuración de un entorno SOC robusto con Wazuh, IDS/IPS, ELK Stack y herramientas de seguridad adicionales.  
+**Este README te guía en la instalación, uso y conceptos clave de Wazuh Manager, Dashboard y Agent.**
 
+---
+
+## 📌 setup_soc_manager.sh
+
+Script para instalar **solo Wazuh Manager y Dashboard** en el servidor central (no instala el agente en el mismo host).  
+Incluye IDS/IPS (Suricata, Snort, Zeek), OSQuery, YARA, OpenVAS y ELK Stack.  
+Configura el firewall UFW y reglas de Active Response.
+
+```bash
 #!/bin/bash
 # =========================================
-# SOC All-in-One con IDS/IPS + Dashboards
+# SOC All-in-One (Manager + Dashboard + IDS/IPS + ELK)
 # Autor: ChatGPT
 # =========================================
 
-WAZUH_VERSION="4.7.3"
 WAZUH_IP=$(hostname -I | awk '{print $1}')
 IFACE=$(ip route | grep default | awk '{print $5}')
 
@@ -18,19 +29,21 @@ sudo apt install curl wget unzip apt-transport-https lsb-release gnupg \
   ufw iptables software-properties-common git python3-pip -y
 
 # -------------------------
-# Wazuh (Manager + Dashboard + Agent)
+# Repositorio Wazuh
 # -------------------------
-echo "[*] Instalando Wazuh..."
-curl -sO https://packages.wazuh.com/4.x/wazuh-manager-${WAZUH_VERSION}.deb
-curl -sO https://packages.wazuh.com/4.x/wazuh-dashboard-${WAZUH_VERSION}.deb
-curl -sO https://packages.wazuh.com/4.x/wazuh-agent-${WAZUH_VERSION}.deb
+echo "[*] Agregando repositorio oficial Wazuh..."
+curl -s https://packages.wazuh.com/key/GPG-KEY-WAZUH | sudo gpg --dearmor -o /usr/share/keyrings/wazuh.gpg
+echo "deb [signed-by=/usr/share/keyrings/wazuh.gpg] https://packages.wazuh.com/4.x/apt/ stable main" | sudo tee /etc/apt/sources.list.d/wazuh.list
+sudo apt update
 
-sudo dpkg -i wazuh-manager-${WAZUH_VERSION}.deb
-sudo dpkg -i wazuh-dashboard-${WAZUH_VERSION}.deb
-sudo WAZUH_MANAGER="$WAZUH_IP" WAZUH_AGENT_NAME="$(hostname)" dpkg -i wazuh-agent-${WAZUH_VERSION}.deb
+# -------------------------
+# Wazuh Manager + Dashboard
+# -------------------------
+echo "[*] Instalando Wazuh Manager y Dashboard..."
+sudo apt install wazuh-manager wazuh-dashboard -y
 
-sudo systemctl enable wazuh-manager wazuh-dashboard wazuh-agent
-sudo systemctl start wazuh-manager wazuh-dashboard wazuh-agent
+sudo systemctl enable wazuh-manager wazuh-dashboard
+sudo systemctl start wazuh-manager wazuh-dashboard
 
 # -------------------------
 # IDS/IPS: Suricata + Snort + Zeek
@@ -41,8 +54,8 @@ sudo apt install suricata snort zeek -y
 # Suricata - configurar interfaz
 sudo sed -i "s|interface: .*|interface: ${IFACE}|" /etc/suricata/suricata.yaml
 
-# Reglas Emerging Threats (ET Open)
-echo "[*] Descargando reglas Emerging Threats para Suricata..."
+# Reglas Emerging Threats
+echo "[*] Descargando reglas Emerging Threats..."
 sudo wget https://rules.emergingthreats.net/open/suricata/emerging.rules.tar.gz -O /tmp/emerging.rules.tar.gz
 sudo tar -xvzf /tmp/emerging.rules.tar.gz -C /etc/suricata/rules --strip-components=1
 sudo systemctl restart suricata
@@ -52,7 +65,7 @@ sudo wget https://rules.emergingthreats.net/open/snort-2.9.0/emerging-all.rules.
 sudo tar -xvzf /tmp/snort.rules.tar.gz -C /etc/snort/rules --strip-components=1
 sudo systemctl restart snort
 
-echo "[*] Configurando Zeek con scripts básicos..."
+# Zeek configuraciones básicas
 sudo zeekctl install
 echo "@load policy/protocols/ssh/interesting-hostnames" | sudo tee -a /opt/zeek/share/zeek/site/local.zeek
 echo "@load policy/protocols/http" | sudo tee -a /opt/zeek/share/zeek/site/local.zeek
@@ -77,27 +90,13 @@ sudo gvm-check-setup
 # ELK Stack
 # -------------------------
 echo "[*] Instalando ELK (Elasticsearch, Logstash, Kibana)..."
-wget -qO - https://artifacts.elastic.co/GPG-KEY-elasticsearch | sudo apt-key add -
-sudo apt install apt-transport-https -y
-echo "deb https://artifacts.elastic.co/packages/7.x/apt stable main" | sudo tee -a /etc/apt/sources.list.d/elastic-7.x.list
+wget -qO - https://artifacts.elastic.co/GPG-KEY-elasticsearch | sudo gpg --dearmor -o /usr/share/keyrings/elasticsearch.gpg
+echo "deb [signed-by=/usr/share/keyrings/elasticsearch.gpg] https://artifacts.elastic.co/packages/7.x/apt stable main" | sudo tee /etc/apt/sources.list.d/elastic-7.x.list
 sudo apt update
 sudo apt install elasticsearch logstash kibana -y
+
 sudo systemctl enable elasticsearch logstash kibana
 sudo systemctl start elasticsearch logstash kibana
-
-# Dashboards de ejemplo (SSH brute force, Suricata alerts, Zeek flows)
-echo "[*] Importando dashboards iniciales..."
-DASH_JSON='{
-  "attributes": {
-    "title": "SOC - Vista General",
-    "hits": 0,
-    "panelsJSON": "[{\"type\":\"visualization\",\"id\":\"ssh_failed_logins\",\"title\":\"Intentos SSH Fallidos\"}, {\"type\":\"visualization\",\"id\":\"suricata_alerts\",\"title\":\"Alertas Suricata\"}, {\"type\":\"visualization\",\"id\":\"zeek_connections\",\"title\":\"Flujos Zeek\"}]",
-    "optionsJSON": "{\"darkMode\":true}",
-    "uiStateJSON": "{}",
-    "version": 1
-  }
-}'
-echo $DASH_JSON | sudo tee /tmp/soc_dashboard.json > /dev/null
 
 # -------------------------
 # Firewall UFW + Active Responses
@@ -135,59 +134,160 @@ sudo systemctl restart wazuh-manager
 # Finalización
 # -------------------------
 echo "========================================="
-echo " SOC All-in-One instalado 🎉"
+echo " SOC Manager instalado 🎉"
 echo " Acceso Wazuh Dashboard: https://${WAZUH_IP} (admin/admin)"
 echo " Acceso Kibana (ELK): http://${WAZUH_IP}:5601"
 echo " OpenVAS Web UI: https://${WAZUH_IP}:9392"
 echo " IDS/IPS activos: Suricata, Snort, Zeek en interfaz ${IFACE}"
 echo " OSQuery y YARA instalados"
 echo " Firewall UFW con Active Responses"
-echo " Dashboards iniciales importados"
 echo "========================================="
+```
 
+---
 
+## 🚀 Explicación
 
+Este script instala **Wazuh Manager + Dashboard** en la máquina actual usando el repositorio oficial APT.  
+No instala el agente en el mismo host (así evitas conflictos).  
+Otras máquinas se conectan a este Manager usando el script de agente remoto (ver abajo).  
+Incluye IDS (Suricata, Snort, Zeek), OSQuery, YARA, OpenVAS y ELK.  
+Configura el firewall y active responses.
 
+---
 
+## 🖥️ Accesos después de instalación
 
+- Wazuh Dashboard: `https://TU_IP_PUBLICA` (admin / admin)
+- Kibana (ELK): `http://TU_IP_PUBLICA:5601`
+- OpenVAS Web UI: `https://TU_IP_PUBLICA:9392`
 
+**Rutas de logs de IDS:**
+- Suricata → `/var/log/suricata/fast.log`
+- Snort → `/var/log/snort/alert`
+- Zeek → `/opt/zeek/logs/current/`
 
+---
 
+## 💡 ¿Qué es Wazuh Agent y en qué se diferencia del Manager y Dashboard?
 
------------------------
+### ✅ Wazuh Agent
 
+- Es un software ligero que instalas en cada máquina que quieres proteger (servidores, estaciones de trabajo, contenedores, etc.).
+- Su trabajo es monitorear el host local y enviar la información al Wazuh Manager.
 
+**¿Qué recolecta?**
+- Logs del sistema y aplicaciones.
+- Integridad de archivos (File Integrity Monitoring, FIM).
+- Procesos, conexiones de red, rootkits.
+- Configuraciones inseguras.
+- Vulnerabilidades del sistema.
 
-Uso
+> **Piensa en el agente como un sensor:** observa todo lo que pasa en la máquina protegida y reporta al Manager.
 
-Guardar el archivo:
+---
 
-nano setup_soc_full.sh
+### ✅ Wazuh Manager
 
+- Es el **cerebro** del sistema.
+- Recibe todos los datos enviados por los agentes.
+- Procesa reglas de seguridad, correlaciona eventos, genera alertas y ejecuta Active Responses (por ejemplo, bloquear una IP maliciosa automáticamente).
+- Maneja la gestión de agentes (registro, claves, comunicación).
 
-(pegar el script completo).
+> **Es el motor de análisis y correlación.**
 
-Dar permisos:
+---
 
-chmod +x setup_soc_full.sh
+### ✅ Wazuh Dashboard
 
+- Es la **interfaz web** que permite visualizar todo lo que el Manager está procesando.
+- Corre encima de Elastic/Kibana y te da gráficos, dashboards, alertas y herramientas de búsqueda.
+- Sirve para que analistas de seguridad vean ataques, vulnerabilidades y reportes.
 
-Ejecutar:
+> **Es el front-end visual para humanos.**
 
-sudo ./setup_soc_full.sh
+---
 
-📊 Accesos después de instalación
+### 📊 En resumen
 
-Wazuh Dashboard: https://TU_IP_PUBLICA (admin / admin).
+- **Agent** = sensor en las máquinas.
+- **Manager** = cerebro que analiza todo.
+- **Dashboard** = la pantalla donde ves los resultados.
 
-Kibana (ELK): http://TU_IP_PUBLICA:5601 → con dashboard inicial (SOC - Vista General).
+---
 
-OpenVAS: https://TU_IP_PUBLICA:9392 (administra vulnerabilidades).
+## 🔹 Script de instalación del Wazuh Agent en máquinas remotas
 
-IDS:
+Guárdalo como `setup_wazuh_agent.sh` y ejecútalo en la máquina a proteger:
 
-Suricata → /var/log/suricata/fast.log
+```bash
+#!/bin/bash
+# =========================================
+# Script instalación Wazuh Agent
+# Máquina a defender (Ubuntu/Debian)
+# Autor: ChatGPT
+# =========================================
 
-Snort → /var/log/snort/alert
+# 👉 Cambia esta variable por la IP o dominio del Manager
+WAZUH_MANAGER_IP="IP_DEL_MANAGER"
 
-Zeek → /opt/zeek/logs/current/
+echo "[*] Actualizando sistema..."
+sudo apt update && sudo apt upgrade -y
+
+echo "[*] Instalando dependencias..."
+sudo apt install curl apt-transport-https lsb-release gnupg -y
+
+echo "[*] Agregando repositorio oficial de Wazuh..."
+curl -s https://packages.wazuh.com/key/GPG-KEY-WAZUH | sudo gpg --dearmor -o /usr/share/keyrings/wazuh.gpg
+echo "deb [signed-by=/usr/share/keyrings/wazuh.gpg] https://packages.wazuh.com/4.x/apt/ stable main" | sudo tee /etc/apt/sources.list.d/wazuh.list
+sudo apt update
+
+echo "[*] Instalando Wazuh Agent..."
+sudo apt install wazuh-agent -y
+
+echo "[*] Configurando conexión con Manager $WAZUH_MANAGER_IP..."
+sudo sed -i "s/<address>MANAGER_IP<\/address>/<address>${WAZUH_MANAGER_IP}<\/address>/" /var/ossec/etc/ossec.conf
+
+echo "[*] Habilitando y arrancando servicio..."
+sudo systemctl daemon-reload
+sudo systemctl enable wazuh-agent
+sudo systemctl start wazuh-agent
+
+echo "[*] Estado del agente:"
+sudo systemctl status wazuh-agent --no-pager
+```
+
+---
+
+### 🔹 Pasos después de instalar
+
+**En la máquina Manager agrega el agente:**
+```bash
+sudo /var/ossec/bin/manage_agents
+```
+Selecciona **A** (agregar agente).  
+Copia la clave generada.
+
+**En la máquina con el Agent, pega la clave:**
+```bash
+sudo /var/ossec/bin/manage_agents
+```
+Selecciona **I** (importar clave).
+
+**Reinicia el agente:**
+```bash
+sudo systemctl restart wazuh-agent
+```
+
+**Verifica en el Manager que el agente aparece conectado:**
+```bash
+sudo /var/ossec/bin/agent_control -l
+```
+
+---
+
+> 👉 Con esto ya tienes el Manager centralizando logs, el Dashboard visualizando y cada máquina con Agente reportando su actividad.
+
+---
+
+**Este archivo sirve como documentación rápida para los administradores de SOC que utilicen este setup.**
