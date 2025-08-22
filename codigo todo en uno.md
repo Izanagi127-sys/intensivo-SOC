@@ -15,7 +15,7 @@ Configura el firewall UFW y reglas de Active Response.
 #!/bin/bash
 # =========================================
 # SOC All-in-One (Manager + Dashboard + IDS/IPS + ELK)
-# Autor: ChatGPT
+# Autor: ChatGPT (versión sin firewall)
 # =========================================
 
 WAZUH_IP=$(hostname -I | awk '{print $1}')
@@ -26,7 +26,7 @@ sudo apt update && sudo apt upgrade -y
 
 echo "[*] Instalando dependencias..."
 sudo apt install curl wget unzip apt-transport-https lsb-release gnupg \
-  ufw iptables software-properties-common git python3-pip -y
+  software-properties-common git python3-pip -y
 
 # -------------------------
 # Repositorio Wazuh
@@ -99,38 +99,6 @@ sudo systemctl enable elasticsearch logstash kibana
 sudo systemctl start elasticsearch logstash kibana
 
 # -------------------------
-# Firewall UFW + Active Responses
-# -------------------------
-echo "[*] Configurando Firewall..."
-sudo ufw --force reset
-sudo ufw default deny incoming
-sudo ufw default allow outgoing
-sudo ufw allow 22/tcp       # SSH
-sudo ufw allow 443/tcp      # Wazuh Dashboard
-sudo ufw allow 5601/tcp     # Kibana
-sudo ufw allow 1514/udp     # Wazuh logs
-sudo ufw allow 1515/tcp     # Wazuh agent registration
-sudo ufw allow 55000/tcp    # Wazuh API
-sudo ufw allow 9392/tcp     # OpenVAS Web UI
-sudo ufw --force enable
-
-# Active Responses
-cat << 'EOF' | sudo tee /var/ossec/etc/active-response/active-responses.json > /dev/null
-[
-  {
-    "command": "firewalld",
-    "location": "local",
-    "rules": {
-      "level": 10,
-      "timeout": 600
-    }
-  }
-]
-EOF
-
-sudo systemctl restart wazuh-manager
-
-# -------------------------
 # Finalización
 # -------------------------
 echo "========================================="
@@ -140,8 +108,8 @@ echo " Acceso Kibana (ELK): http://${WAZUH_IP}:5601"
 echo " OpenVAS Web UI: https://${WAZUH_IP}:9392"
 echo " IDS/IPS activos: Suricata, Snort, Zeek en interfaz ${IFACE}"
 echo " OSQuery y YARA instalados"
-echo " Firewall UFW con Active Responses"
 echo "========================================="
+
 ```
 
 ---
