@@ -15,8 +15,13 @@ Configura el firewall UFW y reglas de Active Response.
 #!/bin/bash
 # =========================================
 # SOC All-in-One (Manager + Dashboard + IDS/IPS + ELK)
-# Autor: ChatGPT (versión sin firewall)
+# Versión segura: 
+# - No toca firewall
+# - Wazuh accesible desde IP pública/privada
+# - Credenciales reales al final
 # =========================================
+
+set -e
 
 WAZUH_IP=$(hostname -I | awk '{print $1}')
 IFACE=$(ip route | grep default | awk '{print $5}')
@@ -42,8 +47,11 @@ sudo apt update
 echo "[*] Instalando Wazuh Manager y Dashboard..."
 sudo apt install wazuh-manager wazuh-dashboard -y
 
+# Cambiar binding de localhost a 0.0.0.0
+sudo sed -i 's/^server.host:.*/server.host: "0.0.0.0"/' /usr/share/wazuh-dashboard/config/opensearch_dashboards.yml
+
 sudo systemctl enable wazuh-manager wazuh-dashboard
-sudo systemctl start wazuh-manager wazuh-dashboard
+sudo systemctl restart wazuh-manager wazuh-dashboard
 
 # -------------------------
 # IDS/IPS: Suricata + Snort + Zeek
@@ -96,19 +104,28 @@ sudo apt update
 sudo apt install elasticsearch logstash kibana -y
 
 sudo systemctl enable elasticsearch logstash kibana
-sudo systemctl start elasticsearch logstash kibana
+sudo systemctl restart elasticsearch logstash kibana
 
 # -------------------------
-# Finalización
+# Mostrar credenciales Wazuh
 # -------------------------
+DASHBOARD_CONFIG="/usr/share/wazuh-dashboard/data/wazuh/config/wazuh.yml"
 echo "========================================="
 echo " SOC Manager instalado 🎉"
-echo " Acceso Wazuh Dashboard: https://${WAZUH_IP} (admin/admin)"
+echo " Acceso Wazuh Dashboard: https://${WAZUH_IP}"
 echo " Acceso Kibana (ELK): http://${WAZUH_IP}:5601"
 echo " OpenVAS Web UI: https://${WAZUH_IP}:9392"
 echo " IDS/IPS activos: Suricata, Snort, Zeek en interfaz ${IFACE}"
 echo " OSQuery y YARA instalados"
 echo "========================================="
+if [[ -f "$DASHBOARD_CONFIG" ]]; then
+    echo "[*] Credenciales iniciales Wazuh Dashboard:"
+    grep -A2 "user" $DASHBOARD_CONFIG
+    echo "👉 Si quieres regenerar password: "
+    echo "   sudo /usr/share/wazuh-dashboard/bin/opensearch-security-reset-password -u admin"
+else
+    echo "[!] No se encontraron credenciales en $DASHBOARD_CONFIG"
+fi
 
 ```
 
